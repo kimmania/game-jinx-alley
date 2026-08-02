@@ -1,16 +1,26 @@
 /** Jinx Alley — app entry: routing, persistence, top-level chrome. */
 import { applyRunResult, spendConsumable } from './engine/campaign.ts';
-import { loadSave, persistSave, type SaveData } from './engine/storage.ts';
+import { dailyBoard, dailyScore, DAILY_ZONE } from './engine/daily.ts';
+import { loadSave, persistSave, todayStr, type SaveData } from './engine/storage.ts';
 import { zoneById } from './engine/zones.ts';
 import type { RunState } from './engine/run.ts';
 import './ui/style.css';
 import { GameScreen, type RunSetup } from './ui/game.ts';
-import { renderZoneSelect, showRunEnd, type ScreenCtx } from './ui/screens.ts';
+import { renderZoneSelect, showDailyResult, showRunEnd, type ScreenCtx } from './ui/screens.ts';
 import { applySettings, showSettings, showTutorial } from './ui/modals.ts';
 import { sounds } from './ui/sounds.ts';
 
 const app = document.getElementById('app')!;
 const save: SaveData = loadSave();
+
+// Test hook (?test=1): deterministic smoke-test state — no tutorial, no music,
+// reduced motion (fast spins). Not persisted.
+const TEST_MODE = new URLSearchParams(location.search).has('test');
+if (TEST_MODE) {
+  save.hasSeenTutorial = true;
+  save.settings.reducedMotion = true;
+  save.settings.music = false;
+}
 
 const persist = (): void => persistSave(save);
 
@@ -49,7 +59,38 @@ const ctx: ScreenCtx = {
   },
   startRun: (zoneId, setup) => startRun(zoneId, setup),
   showZones: () => showZones(),
+  daily: () => daily(),
+  dailyInfo: () => {
+    const today = todayStr();
+    const best = Math.max(0, ...Object.values(save.dailyScores));
+    return { today, score: save.dailyScores[today], best };
+  },
 };
+
+/** Daily Board (§5.3): one seeded attempt per day, score = banked amount. */
+function daily(): void {
+  const today = todayStr();
+  const best = Math.max(0, ...Object.values(save.dailyScores));
+  if (save.dailyScores[today] !== undefined) {
+    showDailyResult(ctx, today, save.dailyScores[today], best, false);
+    return;
+  }
+  sounds.startMusic();
+  new GameScreen(
+    screenRoot,
+    DAILY_ZONE,
+    save.campaign,
+    { insurance: false, peekLens: false, spinAnchor: false },
+    save.settings,
+    (run: RunState) => {
+      const score = dailyScore(run);
+      save.dailyScores[today] = score;
+      persist();
+      showDailyResult(ctx, today, score, Math.max(best, score), true);
+    },
+    dailyBoard(today),
+  );
+}
 
 function showZones(): void {
   syncBank();

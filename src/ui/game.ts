@@ -2,7 +2,7 @@
 import { generateBoard } from '../engine/board.ts';
 import {
   anchorRestop, bankRun, createRun, forfeitRun, resolveTile, runPayout,
-  type RunState, type Tile,
+  type Board, type RunState, type Tile,
 } from '../engine/run.ts';
 import { mulberry32, randomSeed } from '../engine/rng.ts';
 import type { CampaignState } from '../engine/campaign.ts';
@@ -53,6 +53,8 @@ export class GameScreen {
     private setup: RunSetup,
     private settings: Settings,
     private onRunEnd: (run: RunState) => void,
+    /** Fixed board (Daily Board mode) — skips random generation + upgrades. */
+    boardOverride?: Board,
   ) {
     const peekIndices: number[] = [];
     if (setup.peekLens) {
@@ -62,7 +64,7 @@ export class GameScreen {
         if (!peekIndices.includes(i)) peekIndices.push(i);
       }
     }
-    const board = generateBoard({
+    const board = boardOverride ?? generateBoard({
       zone, upgrades: campaign.upgrades, seed: randomSeed(), sims: 200,
     });
     this.run = createRun(board, zone, { ...setup, peekIndices });

@@ -417,3 +417,19 @@ button {
 .color-blind .tile.jinx { border-style: dashed; }
 .color-blind .tile.cash { border-style: dotted; }
 .color-blind .jinx-slot.filled { background: repeating-linear-gradient(45deg, var(--jinx), var(--jinx) 3px, #5c1420 3px, #5c1420 6px); }
+
+/* Daily Board */
+.daily-card {
+  margin-top: 12px;
+  width: 100%;
+}
+.share-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--dim, #555);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.85rem;
+  text-align: left;
+}

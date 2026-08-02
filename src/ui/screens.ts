@@ -9,6 +9,7 @@ import {
 import {
   isCleanRun, runPayout, type EndReason, type RunState,
 } from '../engine/run.ts';
+import { dailyShareText } from '../engine/daily.ts';
 import type { RunSetup } from './game.ts';
 import { sounds } from './sounds.ts';
 
@@ -20,6 +21,10 @@ export interface ScreenCtx {
   persist: () => void;
   startRun: (zoneId: number, setup: RunSetup) => void;
   showZones: () => void;
+  /** Daily Board: start today's attempt, or show today's result if already played. */
+  daily: () => void;
+  /** Today's date string + stored daily score (undefined = not yet played). */
+  dailyInfo: () => { today: string; score: number | undefined; best: number };
 }
 
 const UPGRADE_ICONS: Record<UpgradeKind, string> = {
@@ -60,6 +65,22 @@ export function renderZoneSelect(ctx: ScreenCtx): void {
     list.appendChild(card);
   }
   screen.appendChild(list);
+
+  // Daily Board entry (§5.3): one seeded board per day, 5 spins, no shop.
+  const { today, score: dailyScoreToday } = ctx.dailyInfo();
+  const dailyBtn = document.createElement('button');
+  dailyBtn.className = 'zone-card daily-card';
+  dailyBtn.style.setProperty('--zaccent', '#a855f7');
+  dailyBtn.innerHTML = `
+    <span class="zname">📅 Daily Board — ${today}</span>
+    <span class="zinfo">5 spins · same board for everyone · no protections</span>
+    <span class="zprogress">${dailyScoreToday !== undefined ? `Today: ${fmt(dailyScoreToday)} banked` : "Not played yet — one attempt!"}</span>`;
+  dailyBtn.addEventListener('click', () => {
+    sounds.cash();
+    ctx.daily();
+  });
+  screen.appendChild(dailyBtn);
+
   const menu = document.createElement('div');
   menu.className = 'menu-row';
   const shopBtn = document.createElement('button');
@@ -237,6 +258,52 @@ export function showRunEnd(
   cont.addEventListener('click', () => {
     overlay.remove();
     if (result.campaignWon || result.payout > 0) sounds.fanfare();
+    ctx.showZones();
+  });
+  modal.appendChild(cont);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+/** Daily Board result (§5.3): score, best, shareable text + copy-to-clipboard. */
+export function showDailyResult(
+  ctx: ScreenCtx,
+  dateStr: string,
+  score: number,
+  best: number,
+  justPlayed: boolean,
+): void {
+  const share = dailyShareText(dateStr, score, best);
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <h2>📅 DAILY BOARD</h2>
+    <div class="sub" style="text-align:center;color:var(--dim)">${dateStr}${justPlayed ? '' : ' — already played today'}</div>
+    <div class="summary-math">
+      <div class="row total"><span>Banked</span><span class="${score > 0 ? 'gain' : 'loss'}">${fmt(score)}</span></div>
+      <div class="row"><span>All-time daily best</span><span class="gain">${fmt(best)}</span></div>
+      <div class="row"><span style="color:var(--dim)">Come back tomorrow for a new board!</span><span>🌙</span></div>
+    </div>
+    <pre class="share-text">${share}</pre>`;
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'close-btn';
+  copyBtn.textContent = '📋 COPY SCORE';
+  copyBtn.addEventListener('click', () => {
+    void navigator.clipboard?.writeText(share).then(() => {
+      copyBtn.textContent = '✅ COPIED!';
+      sounds.prize();
+    }).catch(() => {
+      copyBtn.textContent = '⚠ Copy failed — select the text above';
+    });
+  });
+  modal.appendChild(copyBtn);
+  const cont = document.createElement('button');
+  cont.className = 'close-btn';
+  cont.textContent = 'CONTINUE ▶';
+  cont.addEventListener('click', () => {
+    overlay.remove();
     ctx.showZones();
   });
   modal.appendChild(cont);
