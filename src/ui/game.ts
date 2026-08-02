@@ -86,10 +86,11 @@ export class GameScreen {
     this.tileEls = [];
     this.run.board.tiles.forEach((t, i) => {
       const el = document.createElement('div');
-      el.className = `tile ${t.kind}`;
-      const { glyph, text } = tileLabel(t);
+      // Kind class only once revealed (peek lens) or landed on — otherwise the
+      // border color would give away jinx positions while face-down.
       const revealed = this.run.revealed.includes(i);
-      // Face-down unless revealed by peek lens (jinxes/spins still show glyph shape only when revealed)
+      el.className = revealed ? `tile ${t.kind}` : 'tile';
+      const { glyph, text } = tileLabel(t);
       el.innerHTML = revealed
         ? `<span class="glyph">${glyph}</span><span>${text}</span>`
         : '<span class="glyph">❔</span>';
@@ -169,6 +170,7 @@ export class GameScreen {
     const { glyph, text } = tileLabel(t);
     this.tileEls[i].innerHTML = `<span class="glyph">${glyph}</span><span>${text}</span>`;
     this.tileEls[i].classList.remove('revealed');
+    this.tileEls[i].classList.add(t.kind); // apply kind styling only on reveal
   }
 
   private syncHud(): void {
