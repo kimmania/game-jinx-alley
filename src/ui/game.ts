@@ -32,6 +32,7 @@ export class GameScreen {
   private run: RunState;
   private tileEls: HTMLElement[] = [];
   private spinning = false;
+  private stopRequested = false;
   private forfeitArmed = false;
   private rng = mulberry32(randomSeed());
 
@@ -143,7 +144,10 @@ export class GameScreen {
     this.elSpinBtn = document.createElement('button');
     this.elSpinBtn.className = 'spin-btn';
     this.elSpinBtn.textContent = '▶ SPIN';
-    this.elSpinBtn.addEventListener('click', () => void this.spin());
+    this.elSpinBtn.addEventListener('click', () => {
+      if (this.spinning) this.stopRequested = true;
+      else void this.spin();
+    });
     this.elBankBtn = document.createElement('button');
     this.elBankBtn.className = 'bank-btn';
     this.elBankBtn.addEventListener('click', () => this.bank());
@@ -182,7 +186,7 @@ export class GameScreen {
     this.elBankBtn.innerHTML = `<span>🏦 BANK</span><span class="bank-amt">${fmt(s.cash)}</span>`;
     this.elBankBtn.classList.toggle('hot', s.cash >= this.zone.target * 0.5);
     this.elBankBtn.disabled = this.spinning || s.over || s.cash <= 0;
-    this.elSpinBtn.disabled = this.spinning || s.over || s.spinsLeft <= 0;
+    this.elSpinBtn.disabled = (!this.spinning && (s.over || s.spinsLeft <= 0));
     this.elInsBadge.classList.toggle('used', s.insuranceUsed);
     this.elAnchorBtn.disabled =
       this.spinning || s.over || !s.anchorAvailable || s.anchorUsed || !s.snapshot;
@@ -196,32 +200,44 @@ export class GameScreen {
     setTimeout(() => f.remove(), 600);
   }
 
-  /** Sliding-light spin: decelerating steps around the ring, land on random tile. */
+  /** Press-your-luck spin: light slides continuously; press SPIN again to stop it
+   *  where it is (with a short final hop). The board seed drives the rhythm;
+   *  the player's timing picks the tile. */
   private async spin(): Promise<void> {
     if (this.spinning || this.run.over || this.run.spinsLeft <= 0) return;
     this.spinning = true;
-    this.elCenterEvent.textContent = '';
+    this.stopRequested = false;
+    this.elCenterEvent.textContent = 'Press SPIN to stop the light!';
     this.elCenterEvent.className = 'center-event';
+    this.elSpinBtn.textContent = '⏹ STOP';
     this.syncHud();
 
     const n = this.run.board.tiles.length;
-    const target = Math.floor(this.rng() * n);
-    // total steps: 2-3 full laps + offset to target
-    const laps = 2 + Math.floor(this.rng() * 2);
-    const steps = laps * n + target;
-    const base = this.settings.reducedMotion ? 8 : 55;
-    for (let step = 0; step <= steps; step++) {
-      const idx = step % n;
-      this.tileEls.forEach((el, i) => el.classList.toggle('lit', i === idx));
-      if (!this.settings.reducedMotion) {
-        sounds.tick();
-        const t = step / steps;
-        await sleep(base + t * t * 260); // ease-out
-      }
-    }
-    this.tileEls.forEach((el) => el.classList.remove('lit'));
+    // Seeded rhythm: random start + random step interval (fast enough to feel skill-based)
+    let idx = Math.floor(this.rng() * n);
+    const interval = this.settings.reducedMotion ? 40 : 90 + Math.floor(this.rng() * 50);
+    this.tileEls.forEach((el, i) => el.classList.toggle('lit', i === idx));
+    sounds.tick();
 
-    await this.resolveLanding(target);
+    // Slide until the player requests a stop
+    while (!this.stopRequested) {
+      await sleep(interval);
+      if (this.stopRequested) break;
+      idx = (idx + 1) % n;
+      this.tileEls.forEach((el, i) => el.classList.toggle('lit', i === idx));
+      if (!this.settings.reducedMotion) sounds.tick();
+    }
+
+    // Final hop: 1 tile forward with a heavier tick so the stop feels physical
+    await sleep(this.settings.reducedMotion ? 40 : 220);
+    idx = (idx + 1) % n;
+    this.tileEls.forEach((el, i) => el.classList.toggle('lit', i === idx));
+    sounds.tick();
+    await sleep(this.settings.reducedMotion ? 60 : 320);
+
+    this.tileEls.forEach((el) => el.classList.remove('lit'));
+    this.elSpinBtn.textContent = '▶ SPIN';
+    await this.resolveLanding(idx);
     this.spinning = false;
     this.syncHud();
     if (this.run.over) this.finish();

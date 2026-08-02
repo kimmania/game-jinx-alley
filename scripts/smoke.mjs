@@ -38,6 +38,8 @@ try {
   await page.getByRole('button', { name: /Zone 1: Neon Strip/ }).click();
   await page.waitForSelector('.board-ring');
   await page.getByRole('button', { name: /SPIN/ }).click();
+  await page.waitForTimeout(700);
+  await page.getByRole('button', { name: /STOP/ }).click();
   await spinReady();
   await shot('02-board-mid-run.png');
 
@@ -47,6 +49,8 @@ try {
     const btn = page.getByRole('button', { name: /SPIN/ });
     if (await btn.isDisabled().catch(() => true)) break;
     await btn.click();
+    await page.waitForTimeout(500);
+    await page.getByRole('button', { name: /STOP/ }).click().catch(() => {});
     await spinReady().catch(() => {});
     await page.waitForTimeout(300);
   }
