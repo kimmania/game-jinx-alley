@@ -64,7 +64,7 @@ export function showSettings(ctx: ModalCtx): void {
 
 const TUTORIAL = [
   'Welcome to <b>Jinx Alley</b>! Step the light around the boardwalk wheel. <b>SPIN</b> to land on cash tiles and build your run total. Before each spin the tiles <b>shift and flip back down</b> — every landing is a fresh read.',
-  'Beware the <b>JINX</b> tiles — landing on one wipes your run total to <b>$0</b>. Four Jinxes and the run is busted!',
+  'Beware the <b>JINX</b> tiles — landing on one wipes your run total to <b>$0</b>. Three Jinxes and the run is busted!',
   'Hit <b>BANK</b> anytime to lock your total into the campaign bank — safe forever. Run out of spins and you auto-bank.',
   'Bank with <b>0 Jinxes</b> for a <b>+10% clean-run bonus</b>. Bank above the zone target and the excess pays <b>×1.5</b>.',
   'Spend banked cash in the <b>Shop</b>: permanent board upgrades and one-run protections like <b>Jinx Insurance</b>, <b>Peek Lens</b>, and <b>Spin Anchor</b>. Clear all 4 zones!',

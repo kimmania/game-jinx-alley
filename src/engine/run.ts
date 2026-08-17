@@ -173,7 +173,7 @@ export function isCleanRun(state: RunState): boolean {
 /**
  * Cash paid into the campaign bank when the run ends (§5.1):
  * - banked or spins-exhausted (auto-bank): the run total
- * - 4th Jinx / forfeit: $0 (total already wiped)
+ * - 3rd Jinx / forfeit: $0 (total already wiped)
  * - clean run (0 Jinxes): +10%
  * - efficiency: single-run bank above the zone target multiplies the excess ×1.5
  */

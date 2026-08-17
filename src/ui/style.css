@@ -120,6 +120,17 @@ button {
   transform: scale(1.2);
   z-index: 2;
 }
+/* Last tile landed on, marked in the end-of-run reveal. */
+.tile.last-landed {
+  border-color: var(--gold);
+  box-shadow: 0 0 18px 5px rgba(255, 210, 63, 0.85);
+  animation: last-landed-pulse 1.2s ease-in-out infinite;
+  z-index: 2;
+}
+@keyframes last-landed-pulse {
+  0%, 100% { transform: scale(1.08); box-shadow: 0 0 10px 3px rgba(255, 210, 63, 0.55); }
+  50% { transform: scale(1.22); box-shadow: 0 0 24px 8px rgba(255, 210, 63, 0.95); }
+}
 
 .board-center {
   position: absolute;

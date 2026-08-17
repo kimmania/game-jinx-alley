@@ -47,15 +47,13 @@ describe('run state machine', () => {
     expect(s.over).toBe(false);
   });
 
-  it('4th jinx ends the run with $0 payout', () => {
-    const s = createRun(boardWith([spin(3), jinx, jinx, jinx, jinx]), zone1);
-    resolveTile(s, 0); // +3 spins so the 4th jinx is what ends it
+  it('3rd jinx ends the run with $0 payout', () => {
+    const s = createRun(boardWith([spin(3), jinx, jinx, jinx]), zone1);
+    resolveTile(s, 0); // +3 spins so all 3 jinxes can land
     resolveTile(s, 1);
     resolveTile(s, 2);
     expect(s.over).toBe(false);
     resolveTile(s, 3);
-    expect(s.over).toBe(false);
-    resolveTile(s, 4);
     expect(s.jinxes).toBe(MAX_JINXES);
     expect(s.over).toBe(true);
     expect(s.endReason).toBe('jinxes');

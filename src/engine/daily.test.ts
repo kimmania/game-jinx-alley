@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { dailyBoard, dailyScore, dailyShareText, DAILY_ZONE } from './daily.ts';
 import { dailySeed } from './rng.ts';
 import { bankRun, createRun, resolveTile } from './run.ts';
+import { MAX_JINXES } from './zones.ts';
 
 describe('daily board', () => {
   it('is deterministic for a date', () => {
@@ -29,7 +30,7 @@ describe('daily board', () => {
     bankRun(run);
     expect(dailyScore(run)).toBe(1234);
     const bust = createRun(dailyBoard('2026-08-02'), DAILY_ZONE);
-    for (let i = 0; i < 4; i++) resolveTile(bust, bust.board.tiles.findIndex((t) => t.kind === 'jinx'));
+    for (let i = 0; i < MAX_JINXES; i++) resolveTile(bust, bust.board.tiles.findIndex((t) => t.kind === 'jinx'));
     expect(bust.endReason).toBe('jinxes');
     expect(dailyScore(bust)).toBe(0);
   });

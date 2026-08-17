@@ -255,7 +255,7 @@ export function showRunEnd(
   if (clean) rows.push(`<div class="row"><span>Clean run (0 jinxes) +10%</span><span class="gain">+${fmt(afterClean - base)}</span></div>`);
   if (excess > 0) rows.push(`<div class="row"><span>Over target ×${EFFICIENCY_MULTIPLIER} on ${fmt(excess)}</span><span class="gain">+${fmt(Math.round(excess * EFFICIENCY_MULTIPLIER) - excess)}</span></div>`);
   if (busted) {
-    rows.push(`<div class="row"><span>${run.endReason === 'jinxes' ? '4th Jinx — wipe' : 'Forfeit'}</span><span class="loss">$0</span></div>`);
+    rows.push(`<div class="row"><span>${run.endReason === 'jinxes' ? '3rd Jinx — wipe' : 'Forfeit'}</span><span class="loss">$0</span></div>`);
     if (run.peakCash > 0) {
       rows.push(`<div class="row"><span>You peaked at</span><span class="loss">${fmt(run.peakCash)} — wiped</span></div>`);
     }

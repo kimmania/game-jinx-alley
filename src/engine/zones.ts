@@ -5,7 +5,9 @@
 import type { UpgradeLevels } from './board.ts';
 
 export const BOARD_SIZE = 18;
-export const MAX_JINXES = 4;
+/** Bust threshold: this many Jinx hits ends the run. Zones start with 3 spins
+ *  (4 in Jinx's Lair), so 3 keeps the strike row reachable on base spins. */
+export const MAX_JINXES = 3;
 export const NUM_ZONES = 4;
 /** Clean-run bonus (§5.1): banking with 0 Jinxes adds +10%. */
 export const CLEAN_RUN_BONUS = 0.1;
@@ -45,17 +47,17 @@ export const ZONES: ZoneDef[] = [
   {
     zone: 2, name: 'Pier Lights', accent: '#22d3ee',
     cashMin: 100, cashMax: 1000, jinxTiles: 3, spinTiles: 2, spinGain: [1, 2],
-    startingSpins: 3, target: 7500, bustMin: 0.1, bustMax: 0.4,
+    startingSpins: 3, target: 7500, bustMin: 0, bustMax: 0.30,
   },
   {
     zone: 3, name: 'High Roller Row', accent: '#ffd23f',
     cashMin: 250, cashMax: 2500, jinxTiles: 4, spinTiles: 1, spinGain: [1, 2, 3],
-    startingSpins: 3, target: 20000, bustMin: 0.25, bustMax: 0.5,
+    startingSpins: 3, target: 20000, bustMin: 0.005, bustMax: 0.40,
   },
   {
     zone: 4, name: "Jinx's Lair", accent: '#ef233c',
     cashMin: 500, cashMax: 5000, jinxTiles: 5, spinTiles: 1, spinGain: [1, 2, 3],
-    startingSpins: 4, target: 50000, bustMin: 0.45, bustMax: 0.6,
+    startingSpins: 4, target: 50000, bustMin: 0.03, bustMax: 0.55,
   },
 ];
 

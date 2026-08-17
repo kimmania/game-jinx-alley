@@ -80,17 +80,16 @@ describe('campaign meta', () => {
     expect(spendConsumable(c, 'insurance')).toBe(false); // none left
   });
 
-  it('4-jinx bust pays $0 but still counts as a run', () => {
+  it('3-jinx bust pays $0 but still counts as a run', () => {
     const c = newCampaign();
     const s = createRun(
-      board([{ kind: 'spin', amount: 3 }, { kind: 'jinx' }, { kind: 'jinx' }, { kind: 'jinx' }, { kind: 'jinx' }]),
+      board([{ kind: 'spin', amount: 3 }, { kind: 'jinx' }, { kind: 'jinx' }, { kind: 'jinx' }]),
       zone1,
     );
     resolveTile(s, 0); // +3 spins
     resolveTile(s, 1);
     resolveTile(s, 2);
     resolveTile(s, 3);
-    resolveTile(s, 4);
     expect(s.endReason).toBe('jinxes');
     const r = applyRunResult(c, s);
     expect(r.payout).toBe(0);

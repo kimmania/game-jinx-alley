@@ -1,7 +1,7 @@
 # 🎡 Jinx Alley
 
 A neon-noir press-your-luck PWA. Spin the sliding light around an 18-tile ring,
-build a run total, and BANK before the 4th Jinx wipes it all.
+build a run total, and BANK before the 3rd Jinx wipes it all.
 
 **Play: https://kimmania.github.io/game-jinx-alley/**
 
@@ -20,7 +20,7 @@ build a run total, and BANK before the 4th Jinx wipes it all.
   +Spin refills spins, 👁 Jinx **wipes the run total to $0**.
 - After the first spin, the ring shuffles and landed tiles flip back down
   before each new spin, so you can't time the same tile twice.
-- 4 Jinxes = bust ($0 banked). BANK anytime to lock in the run total.
+- 3 Jinxes = bust ($0 banked). BANK anytime to lock in the run total.
 - Clean run (0 Jinxes): +10%. Banking above the zone target multiplies the excess ×1.5.
 
 ## Develop

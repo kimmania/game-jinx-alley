@@ -1,7 +1,7 @@
 /** Game screen: 18-tile DOM ring, sliding-light spin, SPIN/BANK, jinx wipe, consumables. */
 import { generateBoard } from '../engine/board.ts';
 import {
-  anchorRestop, bankPreview, bankRun, createRun, forfeitRun, resolveTile,
+  anchorRestop, bankPreview, bankRun, createRun, forfeitRun, MAX_JINXES, resolveTile,
   type Board, type RunState, type Tile,
 } from '../engine/run.ts';
 import { mulberry32, randomSeed, shuffle } from '../engine/rng.ts';
@@ -43,6 +43,8 @@ export class GameScreen {
   private pool: number;
   private top: number;
   private runNumber: number;
+  /** Board index of the most recent landing — highlighted in the end reveal. */
+  private lastLanded: number | null = null;
   private firstSpin = true;
   private spinning = false;
   private stopRequested = false;
@@ -226,11 +228,13 @@ export class GameScreen {
     this.tileEls[i].innerHTML = '<span class="glyph">❔</span>';
   }
 
-  /** Flip every remaining face-down tile (end-of-run "what could have been"). */
+  /** Flip every remaining face-down tile (end-of-run "what could have been"),
+   *  and mark the last tile landed on so the player sees where the run ended. */
   private revealAll(): void {
     this.run.board.tiles.forEach((_, i) => {
       if (!this.visibleSet.has(i)) this.revealTile(i);
     });
+    if (this.lastLanded !== null) this.tileEls[this.lastLanded].classList.add('last-landed');
   }
 
   /** Jinx risk among currently face-down tiles. */
@@ -245,7 +249,7 @@ export class GameScreen {
     const s = this.run;
     this.elSpinCount.innerHTML = `Spins <b>${s.spinsLeft}</b>`;
     this.elJinxSlots.innerHTML = '';
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < MAX_JINXES; i++) {
       const slot = document.createElement('div');
       slot.className = `jinx-slot${i < s.jinxes ? ' filled' : ''}`;
       this.elJinxSlots.appendChild(slot);
@@ -342,6 +346,7 @@ export class GameScreen {
 
   private async resolveLanding(idx: number): Promise<void> {
     this.revealTile(idx);
+    this.lastLanded = idx;
     const preCash = this.run.cash;
     const ev = resolveTile(this.run, idx);
     const tileEl = this.tileEls[idx];

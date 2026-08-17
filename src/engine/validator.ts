@@ -12,7 +12,7 @@ export interface BustSimResult {
 /**
  * Simulate one run with the validation policy from spec §4.1:
  * spin until the run total reaches the zone target (then BANK), or until
- * the 4th Jinx (bust) or spins run out (walk away, not a bust).
+ * the busting Jinx hit or spins run out (walk away, not a bust).
  */
 function simulateOnce(board: Board, zone: ZoneDef, rng: () => number): { bust: boolean; payout: number } {
   const state: RunState = createRun(board, zone);
@@ -30,7 +30,7 @@ function simulateOnce(board: Board, zone: ZoneDef, rng: () => number): { bust: b
   };
 }
 
-/** Monte Carlo bust probability: P(4 Jinxes before banking ≥ zone target). */
+/** Monte Carlo bust probability: P(busting Jinx hit before banking ≥ zone target). */
 export function bustProbability(board: Board, zone: ZoneDef, rng: () => number, sims = 500): BustSimResult {
   let busts = 0;
   let payoutTotal = 0;
