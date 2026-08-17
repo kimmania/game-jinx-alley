@@ -14,6 +14,8 @@ export interface CampaignState {
   zoneUnlocked: number;
   /** Banked cash credited toward each zone's threshold. */
   zoneBanked: Record<number, number>;
+  /** Best single-run payout ever banked in each zone. */
+  bestRunPayout: Record<number, number>;
   /** Runs played per zone (for ⭐⭐). */
   zoneRuns: Record<number, number>;
   /** Perfect run achieved per zone (for ⭐⭐⭐). */
@@ -29,6 +31,7 @@ export function newCampaign(): CampaignState {
     bank: 0,
     zoneUnlocked: 1,
     zoneBanked: { 1: 0, 2: 0, 3: 0, 4: 0 },
+    bestRunPayout: { 1: 0, 2: 0, 3: 0, 4: 0 },
     zoneRuns: { 1: 0, 2: 0, 3: 0, 4: 0 },
     zonePerfect: { 1: false, 2: false, 3: false, 4: false },
     upgrades: { gild: 0, spinWells: 0, prizeRow: 0 },
@@ -91,6 +94,7 @@ export function applyRunResult(c: CampaignState, state: RunState): RunResult {
 
   c.bank += payout;
   c.zoneBanked[zone.zone] = (c.zoneBanked[zone.zone] ?? 0) + payout;
+  if (payout > (c.bestRunPayout[zone.zone] ?? 0)) c.bestRunPayout[zone.zone] = payout;
   c.zoneRuns[zone.zone] = (c.zoneRuns[zone.zone] ?? 0) + 1;
   c.runsPlayed += 1;
   if (perfect) {

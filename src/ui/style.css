@@ -100,7 +100,7 @@ button {
   font-size: 0.6rem;
   text-align: center;
   line-height: 1.1;
-  transition: box-shadow 120ms, border-color 120ms, transform 120ms;
+  transition: box-shadow 120ms, border-color 120ms, transform 120ms, left 380ms ease-in-out, top 380ms ease-in-out;
 }
 .tile .glyph { font-size: 1.2rem; }
 .tile.cash { color: var(--cyan); border-color: #155e6b; font-weight: 700; }
@@ -191,6 +191,25 @@ button {
   font-weight: 700;
 }
 .anchor-btn:disabled { opacity: 0.35; }
+
+/* ---------- info chips (pool / risk / run count) ---------- */
+.info-row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 8px 0;
+}
+.chip {
+  font-size: 0.68rem;
+  color: var(--cyan);
+  border: 1px solid #155e6b;
+  border-radius: 8px;
+  padding: 3px 8px;
+  background: rgba(34, 211, 238, 0.06);
+  white-space: nowrap;
+}
+.chip.risk { color: var(--jinx); border-color: #5c1420; background: rgba(239, 35, 60, 0.06); }
 
 /* ---------- action buttons ---------- */
 .action-row {
@@ -376,6 +395,30 @@ button {
   color: #141000;
   font-weight: 800;
   padding: 12px;
+}
+.modal .close-btn.secondary {
+  margin-top: 10px;
+  background: var(--card);
+  color: var(--cyan);
+  border: 1px solid #155e6b;
+  font-weight: 700;
+}
+.board-comp {
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--cyan);
+  margin: 4px 0 2px;
+}
+.star-notes {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px dashed var(--edge);
+  border-radius: 10px;
+  font-size: 0.72rem;
+  color: var(--dim);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 .tutorial-text { font-size: 0.95rem; line-height: 1.5; min-height: 4.5em; }
 .tutorial-text b { color: var(--gold); }

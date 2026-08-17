@@ -3,13 +3,17 @@ import {
   buyConsumable, buyUpgrade, starsForZone, upgradeCost, type CampaignState,
 } from '../engine/campaign.ts';
 import {
-  CLEAN_RUN_BONUS, CONSUMABLES, EFFICIENCY_MULTIPLIER, UPGRADES, ZONES, zoneById,
+  CLEAN_RUN_BONUS, CONSUMABLES, EFFICIENCY_MULTIPLIER, gildCashMultiplier, NUM_ZONES,
+  STAR_RUN_LIMIT, UPGRADES, ZONES, zoneById, zoneJackpot,
   type ConsumableKind, type UpgradeKind,
 } from '../engine/zones.ts';
+import { generateBoard } from '../engine/board.ts';
+import type { Board } from '../engine/run.ts';
 import {
   isCleanRun, runPayout, type EndReason, type RunState,
 } from '../engine/run.ts';
 import { dailyShareText } from '../engine/daily.ts';
+import { randomSeed } from '../engine/rng.ts';
 import type { RunSetup } from './game.ts';
 import { sounds } from './sounds.ts';
 
@@ -19,7 +23,7 @@ export interface ScreenCtx {
   root: HTMLElement;
   campaign: CampaignState;
   persist: () => void;
-  startRun: (zoneId: number, setup: RunSetup) => void;
+  startRun: (zoneId: number, setup: RunSetup, boardOverride?: Board) => void;
   showZones: () => void;
   /** Daily Board: start today's attempt, or show today's result if already played. */
   daily: () => void;
@@ -46,6 +50,7 @@ export function renderZoneSelect(ctx: ScreenCtx): void {
   for (const z of ZONES) {
     const locked = z.zone > ctx.campaign.zoneUnlocked;
     const banked = ctx.campaign.zoneBanked[z.zone] ?? 0;
+    const bestRun = ctx.campaign.bestRunPayout[z.zone] ?? 0;
     const stars = starsForZone(ctx.campaign, z.zone);
     const card = document.createElement('button');
     card.className = 'zone-card';
@@ -54,6 +59,7 @@ export function renderZoneSelect(ctx: ScreenCtx): void {
     card.innerHTML = `
       <span class="zname">${locked ? '🔒 ' : ''}Zone ${z.zone}: ${z.name}</span>
       <span class="zinfo">Spins ${z.startingSpins} · Jinxes ${z.jinxTiles} · Cash ${fmt(z.cashMin)}–${fmt(z.cashMax)}</span>
+      <span class="zinfo">🎰 Jackpot ${fmt(zoneJackpot(z, ctx.campaign.upgrades))}${bestRun > 0 ? ` · Best run ${fmt(bestRun)}` : ''}</span>
       <span class="zprogress">${locked ? `Clear Zone ${z.zone - 1} to unlock` : `${fmt(banked)} / ${fmt(z.target)} banked`}</span>
       <span class="zstars">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</span>`;
     if (!locked) {
@@ -92,19 +98,26 @@ export function renderZoneSelect(ctx: ScreenCtx): void {
   ctx.root.appendChild(screen);
 }
 
-/** Pre-run consumable picker (only items the player holds). */
+/** Pre-run consumable picker. The board is dealt first so its composition is
+ *  shown — lets the player choose protections against what's actually there. */
 function showConsumablePick(ctx: ScreenCtx, zoneId: number): void {
   const c = ctx.campaign;
+  const zone = zoneById(zoneId);
+  const board = generateBoard({ zone, upgrades: c.upgrades, seed: randomSeed(), sims: 200 });
+  const counts: Record<string, number> = {};
+  for (const t of board.tiles) counts[t.kind] = (counts[t.kind] ?? 0) + 1;
+  const cashParts: string[] = [`${counts.cash ?? 0} 💵 (${fmt(zone.cashMin)}–${fmt(Math.round((zone.cashMax * gildCashMultiplier(c.upgrades.gild)) / 25) * 25)})`];
+  if (counts.bonus) cashParts.push(`${counts.bonus} 🎁`);
+  const comp = `${cashParts.join(' · ')} · ${counts.spin ?? 0} 🔄 · ${counts.jinx ?? 0} 👁`;
+
   const held = (Object.keys(CONSUMABLES) as ConsumableKind[]).filter((k) => c.consumables[k] > 0);
-  if (held.length === 0) {
-    ctx.startRun(zoneId, { insurance: false, peekLens: false, spinAnchor: false });
-    return;
-  }
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
   const modal = document.createElement('div');
   modal.className = 'modal';
-  modal.innerHTML = `<h2>LOADOUT</h2><p class="sub" style="color:var(--dim);text-align:center">Bring protections into ${zoneById(zoneId).name}?</p>`;
+  modal.innerHTML = `<h2>LOADOUT</h2>
+    <p class="sub" style="color:var(--dim);text-align:center">${zone.name}</p>
+    <p class="sub board-comp">${comp}</p>`;
   const setup: RunSetup = { insurance: false, peekLens: false, spinAnchor: false };
   for (const k of held) {
     const def = CONSUMABLES[k];
@@ -125,7 +138,7 @@ function showConsumablePick(ctx: ScreenCtx, zoneId: number): void {
   go.textContent = '▶ START RUN';
   go.addEventListener('click', () => {
     overlay.remove();
-    ctx.startRun(zoneId, setup);
+    ctx.startRun(zoneId, setup, board);
   });
   modal.appendChild(go);
   overlay.appendChild(modal);
@@ -217,7 +230,8 @@ const END_TITLES: Record<EndReason, { icon: string; title: string }> = {
   forfeit: { icon: '🏳', title: 'FORFEIT' },
 };
 
-/** Run-end overlay: payout breakdown (clean +10%, efficiency ×1.5), stars, CONTINUE. */
+/** Run-end overlay: payout breakdown (clean +10%, efficiency ×1.5), stars,
+ *  plain-language star rules, near-miss on busts, and run-again / next-zone flow. */
 export function showRunEnd(
   ctx: ScreenCtx,
   run: RunState,
@@ -230,6 +244,7 @@ export function showRunEnd(
   const afterClean = clean ? Math.round(base * (1 + CLEAN_RUN_BONUS)) : base;
   const excess = afterClean > zone.target ? afterClean - zone.target : 0;
   const payout = runPayout(run, zone.target);
+  const busted = run.endReason === 'jinxes' || run.endReason === 'forfeit';
 
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
@@ -239,8 +254,19 @@ export function showRunEnd(
   rows.push(`<div class="row"><span>Run total</span><span class="${base > 0 ? 'gain' : 'loss'}">${fmt(base)}</span></div>`);
   if (clean) rows.push(`<div class="row"><span>Clean run (0 jinxes) +10%</span><span class="gain">+${fmt(afterClean - base)}</span></div>`);
   if (excess > 0) rows.push(`<div class="row"><span>Over target ×${EFFICIENCY_MULTIPLIER} on ${fmt(excess)}</span><span class="gain">+${fmt(Math.round(excess * EFFICIENCY_MULTIPLIER) - excess)}</span></div>`);
-  if (run.endReason === 'jinxes' || run.endReason === 'forfeit') {
+  if (busted) {
     rows.push(`<div class="row"><span>${run.endReason === 'jinxes' ? '4th Jinx — wipe' : 'Forfeit'}</span><span class="loss">$0</span></div>`);
+    if (run.peakCash > 0) {
+      rows.push(`<div class="row"><span>You peaked at</span><span class="loss">${fmt(run.peakCash)} — wiped</span></div>`);
+    }
+  }
+  const runsUsed = ctx.campaign.zoneRuns[zone.zone] ?? 0;
+  const starNotes: string[] = [];
+  if (zone.target > 0 && !ctx.campaign.zonePerfect[zone.zone]) {
+    starNotes.push(`★★★ = bank ${fmt(zone.target)}+ with 0 jinxes in one run`);
+  }
+  if (zone.target > 0 && (ctx.campaign.zoneBanked[zone.zone] ?? 0) < zone.target) {
+    starNotes.push(`★★ = clear in ≤${STAR_RUN_LIMIT} runs (runs used: ${runsUsed})`);
   }
   modal.innerHTML = `
     <h2>${icon} ${title}</h2>
@@ -251,10 +277,36 @@ export function showRunEnd(
       <div class="row"><span>Campaign bank</span><span class="gain">${fmt(ctx.campaign.bank)}</span></div>
       ${result.zoneCleared ? `<div class="row"><span style="color:var(--gold)">ZONE ${zone.zone} CLEARED!</span><span>🎉</span></div>` : ''}
       ${result.campaignWon ? `<div class="row"><span style="color:var(--gold)">CAMPAIGN COMPLETE!</span><span>👑</span></div>` : ''}
-    </div>`;
+    </div>
+    ${starNotes.length > 0 ? `<div class="star-notes">${starNotes.map((n) => `<div>${n}</div>`).join('')}</div>` : ''}`;
+
+  // Folio-complete rule: no replay button when the campaign is won.
+  if (!result.campaignWon) {
+    if (result.zoneCleared && zone.zone < NUM_ZONES) {
+      const nextZone = document.createElement('button');
+      nextZone.className = 'close-btn';
+      nextZone.textContent = `ENTER ZONE ${zone.zone + 1} ▶`;
+      nextZone.addEventListener('click', () => {
+        overlay.remove();
+        sounds.fanfare();
+        showConsumablePick(ctx, zone.zone + 1);
+      });
+      modal.appendChild(nextZone);
+    } else {
+      const again = document.createElement('button');
+      again.className = 'close-btn';
+      again.textContent = '▶ RUN IT BACK';
+      again.addEventListener('click', () => {
+        overlay.remove();
+        if (result.payout > 0) sounds.fanfare();
+        showConsumablePick(ctx, zone.zone);
+      });
+      modal.appendChild(again);
+    }
+  }
   const cont = document.createElement('button');
-  cont.className = 'close-btn';
-  cont.textContent = 'CONTINUE ▶';
+  cont.className = 'close-btn secondary';
+  cont.textContent = 'ZONES';
   cont.addEventListener('click', () => {
     overlay.remove();
     if (result.campaignWon || result.payout > 0) sounds.fanfare();

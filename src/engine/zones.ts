@@ -2,6 +2,7 @@
  * Zone parameter tables (spec §4.2) + upgrade / consumable definitions (§3.2, §3.3).
  * All campaign meta lives in the engine so the UI stage is a thin shell.
  */
+import type { UpgradeLevels } from './board.ts';
 
 export const BOARD_SIZE = 18;
 export const MAX_JINXES = 4;
@@ -104,6 +105,39 @@ export function gildCashMultiplier(level: number): number {
 /** Flat bonus per prize-row tile ($250 × level). */
 export function prizeRowBonus(level: number): number {
   return 250 * level;
+}
+
+/** Total value of the cash + bonus tiles on a dealt board, each counted once. */
+export function boardPool(tiles: readonly { kind: string; amount?: number }[]): number {
+  return tiles.reduce(
+    (sum, t) => sum + ((t.kind === 'cash' || t.kind === 'bonus') ? (t.amount ?? 0) : 0),
+    0,
+  );
+}
+
+/** Largest single cash or bonus tile on a dealt board. */
+export function topTile(tiles: readonly { kind: string; amount?: number }[]): number {
+  let top = 0;
+  for (const t of tiles) {
+    if ((t.kind === 'cash' || t.kind === 'bonus') && (t.amount ?? 0) > top) top = t.amount ?? 0;
+  }
+  return top;
+}
+
+/**
+ * Zone jackpot: theoretical max single-run payout with these upgrades —
+ * every landing on the gilded top cash tile, clean run, excess ×1.5.
+ */
+export function zoneJackpot(zone: ZoneDef, upgrades: UpgradeLevels): number {
+  const cashTileCount = BOARD_SIZE - zone.jinxTiles - (zone.spinTiles + upgrades.spinWells) - upgrades.prizeRow;
+  const topCash = Math.round((zone.cashMax * gildCashMultiplier(upgrades.gild)) / 25) * 25;
+  const pot =
+    cashTileCount * topCash +
+    upgrades.prizeRow * prizeRowBonus(upgrades.prizeRow) +
+    Math.max(...zone.spinGain) * topCash;
+  let payout = Math.round(pot * (1 + CLEAN_RUN_BONUS));
+  if (payout > zone.target) payout = zone.target + Math.round((payout - zone.target) * EFFICIENCY_MULTIPLIER);
+  return payout;
 }
 
 // ---------- protection consumables (§3.3) ----------

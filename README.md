@@ -18,6 +18,8 @@ build a run total, and BANK before the 4th Jinx wipes it all.
 
 - SPIN moves the light; where it stops resolves: cash adds to the run total,
   +Spin refills spins, 👁 Jinx **wipes the run total to $0**.
+- After the first spin, the ring shuffles and landed tiles flip back down
+  before each new spin, so you can't time the same tile twice.
 - 4 Jinxes = bust ($0 banked). BANK anytime to lock in the run total.
 - Clean run (0 Jinxes): +10%. Banking above the zone target multiplies the excess ×1.5.
 

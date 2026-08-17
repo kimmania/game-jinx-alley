@@ -3,7 +3,7 @@ import { applyRunResult, spendConsumable } from './engine/campaign.ts';
 import { dailyBoard, dailyScore, DAILY_ZONE } from './engine/daily.ts';
 import { loadSave, persistSave, todayStr, type SaveData } from './engine/storage.ts';
 import { zoneById } from './engine/zones.ts';
-import type { RunState } from './engine/run.ts';
+import type { Board, RunState } from './engine/run.ts';
 import './ui/style.css';
 import { GameScreen, type RunSetup } from './ui/game.ts';
 import { renderZoneSelect, showDailyResult, showRunEnd, type ScreenCtx } from './ui/screens.ts';
@@ -57,7 +57,7 @@ const ctx: ScreenCtx = {
     persist();
     syncBank();
   },
-  startRun: (zoneId, setup) => startRun(zoneId, setup),
+  startRun: (zoneId, setup, boardOverride) => startRun(zoneId, setup, boardOverride),
   showZones: () => showZones(),
   daily: () => daily(),
   dailyInfo: () => {
@@ -97,7 +97,7 @@ function showZones(): void {
   renderZoneSelect(ctx);
 }
 
-function startRun(zoneId: number, setup: RunSetup): void {
+function startRun(zoneId: number, setup: RunSetup, boardOverride?: Board): void {
   const zone = zoneById(zoneId);
   // Spend the chosen consumables up front.
   if (setup.insurance) spendConsumable(save.campaign, 'insurance');
@@ -111,7 +111,7 @@ function startRun(zoneId: number, setup: RunSetup): void {
     persist();
     syncBank();
     showRunEnd(ctx, run, result);
-  });
+  }, boardOverride);
 }
 
 // Boot.

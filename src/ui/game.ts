@@ -1,12 +1,14 @@
 /** Game screen: 18-tile DOM ring, sliding-light spin, SPIN/BANK, jinx wipe, consumables. */
 import { generateBoard } from '../engine/board.ts';
 import {
-  anchorRestop, bankRun, createRun, forfeitRun, resolveTile, runPayout,
+  anchorRestop, bankPreview, bankRun, createRun, forfeitRun, resolveTile,
   type Board, type RunState, type Tile,
 } from '../engine/run.ts';
-import { mulberry32, randomSeed } from '../engine/rng.ts';
+import { mulberry32, randomSeed, shuffle } from '../engine/rng.ts';
 import type { CampaignState } from '../engine/campaign.ts';
-import { PEEK_REVEAL_COUNT, type ZoneDef } from '../engine/zones.ts';
+import {
+  boardPool, PEEK_REVEAL_COUNT, STAR_RUN_LIMIT, topTile, type ZoneDef,
+} from '../engine/zones.ts';
 import type { Settings } from '../engine/storage.ts';
 import { sounds } from './sounds.ts';
 
@@ -30,7 +32,18 @@ function tileLabel(t: Tile): { glyph: string; text: string } {
 
 export class GameScreen {
   private run: RunState;
+  /** Tile elements by board index. */
   private tileEls: HTMLElement[] = [];
+  /** Display slot → board tile index. Reshuffled after every landing so a
+   *  tile can't be farmed by stopping at the same spot. */
+  private order: number[] = [];
+  /** Board indices whose face is currently shown (peek reveals + landed tiles
+   *  from the current generation). Non-peek tiles flip back down on reshuffle. */
+  private visibleSet = new Set<number>();
+  private pool: number;
+  private top: number;
+  private runNumber: number;
+  private firstSpin = true;
   private spinning = false;
   private stopRequested = false;
   private forfeitArmed = false;
@@ -46,6 +59,9 @@ export class GameScreen {
   private elInsBadge!: HTMLElement;
   private elForfeitBtn!: HTMLButtonElement;
   private elJinxSlots!: HTMLElement;
+  private elPoolChip!: HTMLElement;
+  private elRiskChip!: HTMLElement;
+  private elRunChip!: HTMLElement;
 
   constructor(
     private root: HTMLElement,
@@ -54,7 +70,7 @@ export class GameScreen {
     private setup: RunSetup,
     private settings: Settings,
     private onRunEnd: (run: RunState) => void,
-    /** Fixed board (Daily Board mode) — skips random generation + upgrades. */
+    /** Fixed board (Daily Board, or pre-dealt for the loadout preview) — skips generation. */
     boardOverride?: Board,
   ) {
     const peekIndices: number[] = [];
@@ -69,7 +85,23 @@ export class GameScreen {
       zone, upgrades: campaign.upgrades, seed: randomSeed(), sims: 200,
     });
     this.run = createRun(board, zone, { ...setup, peekIndices });
+    this.order = board.tiles.map((_, i) => i);
+    this.pool = boardPool(board.tiles);
+    this.top = topTile(board.tiles);
+    this.runNumber = (campaign.zoneRuns[zone.zone] ?? 0) + 1;
+    for (const i of this.run.revealed) this.visibleSet.add(i);
     this.render();
+  }
+
+  private slotPos(slot: number): { left: number; top: number } {
+    const angle = (slot / this.order.length) * Math.PI * 2 - Math.PI / 2;
+    return { left: 50 + 46 * Math.cos(angle), top: 50 + 46 * Math.sin(angle) };
+  }
+
+  private positionTile(boardIdx: number, slot: number): void {
+    const { left, top } = this.slotPos(slot);
+    this.tileEls[boardIdx].style.left = `${left}%`;
+    this.tileEls[boardIdx].style.top = `${top}%`;
   }
 
   private render(): void {
@@ -86,21 +118,19 @@ export class GameScreen {
     this.tileEls = [];
     this.run.board.tiles.forEach((t, i) => {
       const el = document.createElement('div');
-      // Kind class only once revealed (peek lens) or landed on — otherwise the
-      // border color would give away jinx positions while face-down.
-      const revealed = this.run.revealed.includes(i);
+      // Kind class only while face-up — otherwise the border color would give
+      // away jinx positions while face-down.
+      const revealed = this.visibleSet.has(i);
       el.className = revealed ? `tile ${t.kind}` : 'tile';
       const { glyph, text } = tileLabel(t);
       el.innerHTML = revealed
         ? `<span class="glyph">${glyph}</span><span>${text}</span>`
         : '<span class="glyph">❔</span>';
       if (revealed) el.classList.add('revealed');
-      const angle = (i / this.run.board.tiles.length) * Math.PI * 2 - Math.PI / 2;
-      el.style.left = `${50 + 46 * Math.cos(angle)}%`;
-      el.style.top = `${50 + 46 * Math.sin(angle)}%`;
       ring.appendChild(el);
-      this.tileEls.push(el);
+      this.tileEls[i] = el;
     });
+    this.order.forEach((boardIdx, slot) => this.positionTile(boardIdx, slot));
     wrap.appendChild(ring);
 
     const center = document.createElement('div');
@@ -108,7 +138,7 @@ export class GameScreen {
     center.innerHTML = `
       <div class="center-event"></div>
       <div class="center-total">$0</div>
-      <div class="center-sub">${this.zone.name} · target ${fmt(this.zone.target)}</div>`;
+      <div class="center-sub"></div>`;
     wrap.appendChild(center);
     screen.appendChild(wrap);
     this.elCenterEvent = center.querySelector('.center-event')!;
@@ -139,6 +169,21 @@ export class GameScreen {
     counters.append(this.elSpinCount, this.elJinxSlots, badges);
     screen.appendChild(counters);
 
+    // info chips: board pool, jinx risk, run count / star rules
+    const info = document.createElement('div');
+    info.className = 'info-row';
+    this.elPoolChip = document.createElement('span');
+    this.elPoolChip.className = 'chip';
+    this.elRiskChip = document.createElement('span');
+    this.elRiskChip.className = 'chip risk';
+    this.elRunChip = document.createElement('span');
+    this.elRunChip.className = 'chip';
+    this.elRunChip.textContent = this.zone.zone === 0
+      ? 'Daily Board'
+      : `Run ${this.runNumber} · ★★ ≤${STAR_RUN_LIMIT} runs`;
+    info.append(this.elPoolChip, this.elRiskChip, this.elRunChip);
+    screen.appendChild(info);
+
     // actions
     const actions = document.createElement('div');
     actions.className = 'action-row';
@@ -166,11 +211,34 @@ export class GameScreen {
   }
 
   private revealTile(i: number): void {
+    this.visibleSet.add(i);
     const t = this.run.board.tiles[i];
     const { glyph, text } = tileLabel(t);
     this.tileEls[i].innerHTML = `<span class="glyph">${glyph}</span><span>${text}</span>`;
     this.tileEls[i].classList.remove('revealed');
     this.tileEls[i].classList.add(t.kind); // apply kind styling only on reveal
+  }
+
+  /** Flip one tile back face-down (used when the ring reshuffles). */
+  private hideTile(i: number): void {
+    this.visibleSet.delete(i);
+    this.tileEls[i].className = 'tile';
+    this.tileEls[i].innerHTML = '<span class="glyph">❔</span>';
+  }
+
+  /** Flip every remaining face-down tile (end-of-run "what could have been"). */
+  private revealAll(): void {
+    this.run.board.tiles.forEach((_, i) => {
+      if (!this.visibleSet.has(i)) this.revealTile(i);
+    });
+  }
+
+  /** Jinx risk among currently face-down tiles. */
+  private riskText(): string {
+    const tiles = this.run.board.tiles;
+    const down = tiles.filter((_, i) => !this.visibleSet.has(i));
+    const jinxDown = down.filter((t) => t.kind === 'jinx').length;
+    return `👁 ${jinxDown} jinx${jinxDown === 1 ? '' : 'es'} hidden · ${down.length} face-down`;
   }
 
   private syncHud(): void {
@@ -183,10 +251,19 @@ export class GameScreen {
       this.elJinxSlots.appendChild(slot);
     }
     this.elCenterTotal.textContent = fmt(s.cash);
-    const cleanBonus = s.jinxes === 0 && s.cash > 0 ? ` · clean +10% so far` : '';
-    this.elCenterSub.textContent = `${this.zone.name} · target ${fmt(this.zone.target)}${cleanBonus}`;
-    this.elBankBtn.innerHTML = `<span>🏦 BANK</span><span class="bank-amt">${fmt(s.cash)}</span>`;
-    this.elBankBtn.classList.toggle('hot', s.cash >= this.zone.target * 0.5);
+    let sub = `${this.zone.name}`;
+    if (this.zone.target > 0) {
+      sub += ` · target ${fmt(this.zone.target)}`;
+      if (s.jinxes === 0 && s.cash > 0) sub += ' · clean +10%';
+      if (s.cash > this.zone.target) sub += ' · excess ×1.5';
+    }
+    this.elCenterSub.textContent = sub;
+    this.elPoolChip.textContent = `💰 Pool ${fmt(this.pool)} · Top ${fmt(this.top)}`;
+    this.elRiskChip.textContent = this.riskText();
+    // BANK shows what banking now actually pays, not the raw total.
+    const preview = bankPreview(s.cash, s.jinxes, this.zone.target);
+    this.elBankBtn.innerHTML = `<span>🏦 BANK</span><span class="bank-amt">${fmt(preview)}</span>`;
+    this.elBankBtn.classList.toggle('hot', this.zone.target > 0 && s.cash >= this.zone.target * 0.5);
     this.elBankBtn.disabled = this.spinning || s.over || s.cash <= 0;
     this.elSpinBtn.disabled = (!this.spinning && (s.over || s.spinsLeft <= 0));
     this.elInsBadge.classList.toggle('used', s.insuranceUsed);
@@ -202,6 +279,16 @@ export class GameScreen {
     setTimeout(() => f.remove(), 600);
   }
 
+  /** Reshuffle tile positions (CSS-transitioned) and flip back any landed
+   *  tiles that aren't peek-revealed, so no value can be timed repeatedly. */
+  private reshuffle(): void {
+    for (const i of [...this.visibleSet]) {
+      if (!this.run.revealed.includes(i)) this.hideTile(i);
+    }
+    this.order = shuffle(this.rng, [...this.order]);
+    this.order.forEach((boardIdx, slot) => this.positionTile(boardIdx, slot));
+  }
+
   /** Press-your-luck spin: light slides continuously; press SPIN again to stop it
    *  where it is (with a short final hop). The board seed drives the rhythm;
    *  the player's timing picks the tile. */
@@ -209,37 +296,45 @@ export class GameScreen {
     if (this.spinning || this.run.over || this.run.spinsLeft <= 0) return;
     this.spinning = true;
     this.stopRequested = false;
+    // Fresh read every spin: reshuffle + re-hide landed tiles (not the first spin).
+    if (!this.firstSpin) {
+      this.reshuffle();
+      // Let the glide settle before the light starts moving.
+      await sleep(this.settings.reducedMotion ? 0 : 420);
+    }
+    this.firstSpin = false;
+    this.syncHud();
     this.elCenterEvent.textContent = 'Press SPIN to stop the light!';
     this.elCenterEvent.className = 'center-event';
     this.elSpinBtn.textContent = '⏹ STOP';
-    this.syncHud();
 
-    const n = this.run.board.tiles.length;
+    const n = this.order.length;
     // Seeded rhythm: random start + random step interval (fast enough to feel skill-based)
-    let idx = Math.floor(this.rng() * n);
+    let slot = Math.floor(this.rng() * n);
     const interval = this.settings.reducedMotion ? 40 : 90 + Math.floor(this.rng() * 50);
-    this.tileEls.forEach((el, i) => el.classList.toggle('lit', i === idx));
+    this.order.forEach((b, d) => this.tileEls[b].classList.toggle('lit', d === slot));
     sounds.tick();
 
     // Slide until the player requests a stop
     while (!this.stopRequested) {
       await sleep(interval);
       if (this.stopRequested) break;
-      idx = (idx + 1) % n;
-      this.tileEls.forEach((el, i) => el.classList.toggle('lit', i === idx));
+      slot = (slot + 1) % n;
+      this.order.forEach((b, d) => this.tileEls[b].classList.toggle('lit', d === slot));
       if (!this.settings.reducedMotion) sounds.tick();
     }
 
     // Final hop: 1 tile forward with a heavier tick so the stop feels physical
     await sleep(this.settings.reducedMotion ? 40 : 220);
-    idx = (idx + 1) % n;
-    this.tileEls.forEach((el, i) => el.classList.toggle('lit', i === idx));
+    slot = (slot + 1) % n;
+    this.order.forEach((b, d) => this.tileEls[b].classList.toggle('lit', d === slot));
     sounds.tick();
     await sleep(this.settings.reducedMotion ? 60 : 320);
 
     this.tileEls.forEach((el) => el.classList.remove('lit'));
     this.elSpinBtn.textContent = '▶ SPIN';
-    await this.resolveLanding(idx);
+    const landedBoardIdx = this.order[slot];
+    await this.resolveLanding(landedBoardIdx);
     this.spinning = false;
     this.syncHud();
     if (this.run.over) this.finish();
@@ -331,9 +426,9 @@ export class GameScreen {
   }
 
   private finish(): void {
-    // small delay so the last event is readable
-    setTimeout(() => this.onRunEnd(this.run), this.settings.reducedMotion ? 100 : 900);
+    // Show the whole board first — the "what could have been" reveal —
+    // then hand off to the run-end overlay.
+    this.revealAll();
+    setTimeout(() => this.onRunEnd(this.run), this.settings.reducedMotion ? 100 : 1400);
   }
 }
-
-export { runPayout };

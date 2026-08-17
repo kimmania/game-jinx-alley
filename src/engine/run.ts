@@ -22,6 +22,8 @@ export interface RunState {
   jinxes: number;
   /** Unbanked run total. Wipes to $0 on a Jinx. */
   cash: number;
+  /** Highest the run total climbed this run (near-miss feedback on busts). */
+  peakCash: number;
   /** Tile indices revealed by peek lens (until landed on once, §9.2). */
   revealed: number[];
   insuranceAvailable: boolean;
@@ -32,7 +34,7 @@ export interface RunState {
   endReason: EndReason | null;
   lastEvent: RunEvent | null;
   /** Snapshot of the state before the last tile resolved (spin anchor). */
-  snapshot: { spinsLeft: number; jinxes: number; cash: number; revealed: number[] } | null;
+  snapshot: { spinsLeft: number; jinxes: number; cash: number; peakCash: number; revealed: number[] } | null;
 }
 
 export type RunEvent =
@@ -59,6 +61,7 @@ export function createRun(board: Board, zone: ZoneDef, ctx?: Partial<RunContext>
     spinsLeft: zone.startingSpins,
     jinxes: 0,
     cash: 0,
+    peakCash: 0,
     revealed: [...(ctx?.peekIndices ?? [])],
     insuranceAvailable: ctx?.insurance ?? false,
     insuranceUsed: false,
@@ -93,6 +96,7 @@ export function resolveTile(state: RunState, tileIndex: number): RunEvent {
     spinsLeft: state.spinsLeft,
     jinxes: state.jinxes,
     cash: state.cash,
+    peakCash: state.peakCash,
     revealed: [...state.revealed],
   };
 
@@ -126,6 +130,7 @@ export function resolveTile(state: RunState, tileIndex: number): RunEvent {
       break;
   }
   state.lastEvent = ev;
+  if (state.cash > state.peakCash) state.peakCash = state.cash;
   if (state.jinxes >= MAX_JINXES) endRun(state, 'jinxes');
   else if (state.spinsLeft <= 0) endRun(state, 'spins'); // auto-bank
   return ev;
@@ -141,6 +146,7 @@ export function anchorRestop(state: RunState): boolean {
   state.spinsLeft = snap.spinsLeft;
   state.jinxes = snap.jinxes;
   state.cash = snap.cash;
+  state.peakCash = snap.peakCash;
   state.revealed = snap.revealed;
   state.snapshot = null;
   state.anchorUsed = true;
@@ -179,6 +185,18 @@ export function runPayout(state: RunState, zoneTarget: number): number {
     payout = zoneTarget + Math.round((payout - zoneTarget) * EFFICIENCY_MULTIPLIER);
   }
   return payout;
+}
+
+/**
+ * What banking right now would actually pay: clean +10%, excess above the
+ * zone target ×1.5. Campaign zones only (target > 0); daily boards pay raw.
+ */
+export function bankPreview(cash: number, jinxes: number, target: number): number {
+  if (target <= 0) return cash;
+  let p = cash;
+  if (p > 0 && jinxes === 0) p = Math.round(p * (1 + CLEAN_RUN_BONUS));
+  if (p > target) p = target + Math.round((p - target) * EFFICIENCY_MULTIPLIER);
+  return p;
 }
 
 /** Perfect run (§3.4): bank ≥ zone target in a single run with 0 Jinxes. */

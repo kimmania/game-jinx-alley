@@ -34,8 +34,11 @@ try {
   await page.goto(`${base}/?test=1`, { waitUntil: 'networkidle' });
   await shot('01-zone-select.png');
 
-  // start a run on Zone 1 (fresh save holds no consumables, so it goes straight in)
+  // start a run on Zone 1 → loadout modal (shows board composition) → START RUN
   await page.getByRole('button', { name: /Zone 1: Neon Strip/ }).click();
+  await page.waitForSelector('.board-comp');
+  await shot('05-loadout.png');
+  await page.getByRole('button', { name: /START RUN/ }).click();
   await page.waitForSelector('.board-ring');
   await page.getByRole('button', { name: /SPIN/ }).click();
   await page.waitForTimeout(700);
@@ -55,8 +58,10 @@ try {
     await page.waitForTimeout(300);
   }
   await page.waitForSelector('.overlay', { timeout: 10000 });
+  // let the end-of-run full-board reveal settle before screenshotting
+  await page.waitForTimeout(1600);
   await shot('04-run-end.png');
-  await page.getByRole('button', { name: /CONTINUE/ }).click();
+  await page.getByRole('button', { name: /ZONES/ }).click();
   await page.waitForSelector('.zone-list');
 
   // shop
