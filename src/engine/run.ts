@@ -4,7 +4,7 @@ import {
 
 export type Tile =
   | { kind: 'cash'; amount: number }
-  | { kind: 'spin'; amount: number }
+  | { kind: 'spin'; amount: number; cash?: number } // some +Spin tiles also pay cash
   | { kind: 'bonus'; amount: number } // prize-row flat bonus, no Jinx risk
   | { kind: 'jinx' };
 
@@ -39,7 +39,7 @@ export interface RunState {
 
 export type RunEvent =
   | { type: 'cash'; amount: number }
-  | { type: 'spin'; amount: number }
+  | { type: 'spin'; amount: number; cash?: number }
   | { type: 'bonus'; amount: number }
   | { type: 'jinx' }
   | { type: 'insurance' } // Jinx absorbed by Jinx Insurance
@@ -116,7 +116,8 @@ export function resolveTile(state: RunState, tileIndex: number): RunEvent {
       break;
     case 'spin':
       state.spinsLeft += tile.amount;
-      ev = { type: 'spin', amount: tile.amount };
+      if (tile.cash) state.cash += tile.cash;
+      ev = { type: 'spin', amount: tile.amount, cash: tile.cash };
       break;
     case 'jinx':
       if (state.insuranceAvailable && !state.insuranceUsed) {

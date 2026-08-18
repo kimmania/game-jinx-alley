@@ -17,7 +17,7 @@ build a run total, and BANK before the 3rd Jinx wipes it all.
 ## Rules in brief
 
 - SPIN moves the light; where it stops resolves: cash adds to the run total,
-  +Spin refills spins, 👁 Jinx **wipes the run total to $0**.
+  +Spin refills spins (some +Spin tiles also pay a cash bonus), 👁 Jinx **wipes the run total to $0**.
 - After the first spin, the ring shuffles and landed tiles flip back down
   before each new spin, so you can't time the same tile twice.
 - 3 Jinxes = bust ($0 banked). BANK anytime to lock in the run total.

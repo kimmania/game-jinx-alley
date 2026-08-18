@@ -1,7 +1,8 @@
 import type { Board, Tile } from './run.ts';
 import type { ZoneDef } from './zones.ts';
 import {
-  BOARD_SIZE, gildCashMultiplier, prizeRowBonus, type UpgradeKind,
+  BOARD_SIZE, gildCashMultiplier, prizeRowBonus, SPIN_CASH_CHANCE, SPIN_CASH_FRACTION,
+  type UpgradeKind,
 } from './zones.ts';
 import { mulberry32, pick, shuffle } from './rng.ts';
 import { validateBoard } from './validator.ts';
@@ -28,11 +29,23 @@ export function cashValue(zone: ZoneDef, gildLevel: number, rng: () => number): 
   return Math.round((min + rng() * (max - min)) / 25) * 25;
 }
 
+/** Cash bonus carried by some +Spin tiles: half the zone's gilded band, snapped to $25. */
+export function spinCashBonus(zone: ZoneDef, gildLevel: number, rng: () => number): number {
+  const mult = gildCashMultiplier(gildLevel);
+  const min = zone.cashMin * mult * SPIN_CASH_FRACTION;
+  const max = zone.cashMax * mult * SPIN_CASH_FRACTION;
+  return Math.round((min + rng() * (max - min)) / 25) * 25;
+}
+
 function dealTiles(zone: ZoneDef, upgrades: UpgradeLevels, rng: () => number): Tile[] {
   const tiles: Tile[] = [];
   for (let i = 0; i < zone.jinxTiles; i++) tiles.push({ kind: 'jinx' });
   const spinTileCount = zone.spinTiles + upgrades.spinWells;
-  for (let i = 0; i < spinTileCount; i++) tiles.push({ kind: 'spin', amount: pick(rng, zone.spinGain) });
+  for (let i = 0; i < spinTileCount; i++) {
+    const tile: Tile = { kind: 'spin', amount: pick(rng, zone.spinGain) };
+    if (rng() < SPIN_CASH_CHANCE) tile.cash = spinCashBonus(zone, upgrades.gild, rng);
+    tiles.push(tile);
+  }
   for (let i = 0; i < upgrades.prizeRow; i++) {
     tiles.push({ kind: 'bonus', amount: prizeRowBonus(upgrades.prizeRow) });
   }

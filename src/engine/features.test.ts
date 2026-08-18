@@ -9,15 +9,65 @@ const seededBoard = (zoneId: number) =>
   generateBoard({ zone: zoneById(zoneId), seed: dailySeed(`z${zoneId}-2026-08-17`), sims: 200 });
 
 describe('board pool & top tile', () => {
-  it('pool sums cash + bonus tiles once each; top is the largest', () => {
+  it('pool sums cash + bonus tiles once each, plus spin-tile cash bonuses', () => {
     const board = seededBoard(1);
     const cashSum = board.tiles
       .filter((t) => t.kind === 'cash')
       .reduce((s, t) => s + (t.kind === 'cash' ? t.amount : 0), 0);
-    expect(boardPool(board.tiles)).toBe(cashSum);
+    const spinCashSum = board.tiles
+      .filter((t) => t.kind === 'spin')
+      .reduce((s, t) => s + (t.kind === 'spin' ? (t.cash ?? 0) : 0), 0);
+    expect(boardPool(board.tiles)).toBe(cashSum + spinCashSum);
     const top = Math.max(...board.tiles.map((t) => (t.kind === 'cash' ? t.amount : 0)));
     expect(topTile(board.tiles)).toBe(top);
     expect(boardPool(board.tiles)).toBeGreaterThan(0);
+  });
+});
+
+describe('spin tiles with cash bonuses', () => {
+  it('about half of spin tiles carry cash; cash lands in half the zone band', () => {
+    const zone = zoneById(1);
+    let withCash = 0;
+    let total = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const board = generateBoard({ zone, seed, sims: 50 });
+      for (const t of board.tiles) {
+        if (t.kind !== 'spin') continue;
+        total += 1;
+        if (t.cash !== undefined) {
+          withCash += 1;
+          expect(t.cash).toBeGreaterThanOrEqual(zone.cashMin / 2 - 25);
+          expect(t.cash).toBeLessThanOrEqual(zone.cashMax / 2 + 25);
+          expect(t.cash % 25).toBe(0);
+        }
+      }
+    }
+    expect(total).toBeGreaterThan(0);
+    // 60 boards × 2 spin tiles: expect a healthy share to carry cash
+    expect(withCash / total).toBeGreaterThan(0.25);
+    expect(withCash / total).toBeLessThan(0.75);
+  });
+
+  it('landing on a cash-carrying spin tile refunds spins AND pays the cash', () => {
+    const zone = zoneById(1);
+    // Scan seeds for a board whose spin tile carries cash (most seeds qualify).
+    let board: ReturnType<typeof generateBoard> | null = null;
+    let idx = -1;
+    for (let seed = 1; seed <= 200 && board === null; seed++) {
+      const b = generateBoard({ zone, seed, sims: 50 });
+      const i = b.tiles.findIndex((t) => t.kind === 'spin' && t.cash !== undefined);
+      if (i >= 0) { board = b; idx = i; }
+    }
+    if (board === null) throw new Error('no cash-carrying spin board found in 200 seeds');
+    const run = createRun(board, zone);
+    run.spinsLeft = 1;
+    const tile = board.tiles[idx];
+    if (tile.kind !== 'spin') throw new Error('unreachable');
+    const ev = resolveTile(run, idx);
+    expect(ev.type).toBe('spin');
+    expect(run.spinsLeft).toBe(tile.amount); // 1 spent, +amount gained
+    expect(run.cash).toBe(tile.cash);
+    expect(run.peakCash).toBe(tile.cash);
   });
 });
 

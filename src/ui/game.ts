@@ -24,7 +24,7 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 function tileLabel(t: Tile): { glyph: string; text: string } {
   switch (t.kind) {
     case 'cash': return { glyph: '💵', text: fmt(t.amount) };
-    case 'spin': return { glyph: '🔄', text: `+${t.amount}` };
+    case 'spin': return { glyph: '🔄', text: t.cash ? `+${t.amount} · ${fmt(t.cash)}` : `+${t.amount}` };
     case 'bonus': return { glyph: '🎁', text: fmt(t.amount) };
     case 'jinx': return { glyph: '👁', text: 'JINX' };
   }
@@ -361,7 +361,12 @@ export class GameScreen {
         break;
       case 'spin':
         sounds.spinBonus();
-        this.setEvent(`🔄 +${ev.amount} SPIN${ev.amount > 1 ? 'S' : ''}`, 'gain');
+        if (ev.cash) {
+          sounds.cash();
+          this.setEvent(`🔄 +${ev.amount} SPIN${ev.amount > 1 ? 'S' : ''} + ${fmt(ev.cash)} → ${fmt(this.run.cash)}`, 'gain');
+        } else {
+          this.setEvent(`🔄 +${ev.amount} SPIN${ev.amount > 1 ? 'S' : ''}`, 'gain');
+        }
         break;
       case 'insurance':
         sounds.prize();

@@ -15,6 +15,10 @@ export const CLEAN_RUN_BONUS = 0.1;
 export const EFFICIENCY_MULTIPLIER = 1.5;
 /** Peek lens reveals this many tiles pre-run (§3.3). */
 export const PEEK_REVEAL_COUNT = 3;
+/** Chance that a +Spin tile also pays a cash bonus. */
+export const SPIN_CASH_CHANCE = 0.5;
+/** Spin-tile cash bonuses draw from half the zone's cash band. */
+export const SPIN_CASH_FRACTION = 0.5;
 /** ⭐⭐ condition (§5.2): reach zone target in ≤ this many runs. */
 export const STAR_RUN_LIMIT = 5;
 
@@ -109,12 +113,14 @@ export function prizeRowBonus(level: number): number {
   return 250 * level;
 }
 
-/** Total value of the cash + bonus tiles on a dealt board, each counted once. */
-export function boardPool(tiles: readonly { kind: string; amount?: number }[]): number {
-  return tiles.reduce(
-    (sum, t) => sum + ((t.kind === 'cash' || t.kind === 'bonus') ? (t.amount ?? 0) : 0),
-    0,
-  );
+/** Total value of the cash + bonus tiles on a dealt board, each counted once.
+ *  Spin tiles that carry a cash bonus count their cash too. */
+export function boardPool(tiles: readonly { kind: string; amount?: number; cash?: number }[]): number {
+  return tiles.reduce((sum, t) => {
+    if (t.kind === 'cash' || t.kind === 'bonus') return sum + (t.amount ?? 0);
+    if (t.kind === 'spin') return sum + (t.cash ?? 0);
+    return sum;
+  }, 0);
 }
 
 /** Largest single cash or bonus tile on a dealt board. */
